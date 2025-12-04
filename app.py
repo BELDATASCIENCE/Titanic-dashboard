@@ -31,30 +31,25 @@ def load_model():
 @st.cache_resource
 def fit_scaler():
     try:
-        df_original_for_scaler = pd.read_csv('titanic_data.csv')
+        # As requested, using only Inferencia.csv for all data operations.
+        # NOTE: This means the scaler will be fitted on the synthetic inference data,
+        # which might differ from the scaler used during the original model training
+        # on titanic_data.csv. This could lead to slight inconsistencies in manual predictions.
+        df_for_scaler = pd.read_csv('Inferencia.csv') # Use Inferencia.csv
         
-        # Apply the same preprocessing steps as during training
-        df_original_for_scaler['Embarked'] = df_original_for_scaler['Embarked'].fillna(df_original_for_scaler['Embarked'].mode()[0])
-        df_original_for_scaler['Age'] = df_original_for_scaler['Age'].fillna(df_original_for_scaler['Age'].median())
-        
-        q_low_scaler = df_original_for_scaler['Fare'].quantile(0.01)
-        q_high_scaler = df_original_for_scaler['Fare'].quantile(0.99)
-        df_original_for_scaler = df_original_for_scaler[(df_original_for_scaler['Fare'] >= q_low_scaler) & (df_original_for_scaler['Fare'] <= q_high_scaler)]
-
-        df_original_for_scaler['FamilySize'] = df_original_for_scaler['SibSp'] + df_original_for_scaler['Parch'] + 1
-        df_original_for_scaler['Sex'] = df_original_for_scaler['Sex'].map({'male':0,'female':1})
-        df_original_for_scaler['Embarked'] = df_original_for_scaler['Embarked'].map({'S':0,'C':1,'Q':2})
-        
-        features = ['Pclass', 'Sex', 'Age', 'SibSp', 'Parch', 'Fare', 'Embarked', 'FamilySize']
+        # Inferencia.csv already contains the preprocessed features (numeric Sex, Embarked, FamilySize)
+        # So, no further preprocessing like fillna, quantile trimming, or categorical mapping is needed here.
+        # Just select the features used for scaling.
+        features_for_scaling = ['Pclass', 'Sex', 'Age', 'SibSp', 'Parch', 'Fare', 'Embarked', 'FamilySize']
         
         scaler = StandardScaler()
-        scaler.fit(df_original_for_scaler[features])
+        scaler.fit(df_for_scaler[features_for_scaling]) # Fit on Inferencia.csv
         return scaler
     except FileNotFoundError:
-        st.error("Error: 'titanic_data.csv' no encontrado. Asegúrese de que el conjunto de datos original esté disponible.")
+        st.error("Error: 'Inferencia.csv' no encontrado. Asegúrese de que el archivo de inferencia esté disponible para el escalador.") # Update error message
         st.stop()
     except Exception as e:
-        st.error(f"Error al preparar el escalador: {e}")
+        st.error(f"Error al preparar el escalador usando Inferencia.csv: {e}") # Update error message
         st.stop()
 
 # 4. Function to load Inferencia.csv
@@ -157,7 +152,7 @@ if not df_inferencia.empty:
         
         # Format as percentage with one decimal
         survival_pivot = (survival_pivot).round(1).astype(str) + '%'
-        survival_pivot = survival_pivot.replace('nan%', 'N/A') # Handle NaN values for combinations with no data
+        survival_pivot = survival_pivot.replace('nan%', 'N/A') # Fill NaN for combinations with no data
         
         st.dataframe(survival_pivot)
     else:
@@ -200,11 +195,12 @@ if not df_inferencia.empty:
     with col2:
         # Gráfico de línea de las predicciones (Survival_Probability)
         # Ensure 'Survival_Probability_Numeric' is available from the combined table logic above
-        # If not, recreate it here:
         if 'Survival_Probability_Numeric' not in filtered_df.columns:
             filtered_df['Survival_Probability_Numeric'] = filtered_df['Survival_Probability'].str.replace('%', '', regex=False).astype(float)
         
-        fig_line_proba = px.line(filtered_df.sort_values('Age'), x='Age', y='Survival_Probability_Numeric',
+        # Sort by Age for a meaningful line plot
+        filtered_df_sorted_age = filtered_df.sort_values('Age')
+        fig_line_proba = px.line(filtered_df_sorted_age, x='Age', y='Survival_Probability_Numeric',
                                  color='Sex_Label', # Differentiated by gender for better insight
                                  title='Probabilidad de Supervivencia Prevista por Edad',
                                  labels={'Age': 'Edad', 'Survival_Probability_Numeric': 'Probabilidad de Supervivencia (%)', 'Sex_Label': 'Género'},
